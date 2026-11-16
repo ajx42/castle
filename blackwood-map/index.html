@@ -36,8 +36,11 @@
   li { cursor: pointer; }
   li:hover { color: var(--red); }
   /* when shown inside the Sketches page, sit on its white background */
+  html.embedded { --paper: #fff; }
   html.embedded body { background: transparent; }
-  html.embedded .sheet { box-shadow: 0 2px 10px rgba(0,0,0,.18); }
+  html.embedded main { max-width: none; }
+  html.embedded .sheet { background: transparent; box-shadow: none; padding-left: 0; padding-right: 0; }
+  html.embedded rect[filter] { display: none; }
 </style>
 <script>if (window.self !== window.top) document.documentElement.classList.add('embedded');</script>
 </head>
@@ -60,6 +63,7 @@
   </section>
 </main>
 <script>
+const PAPER = getComputedStyle(document.documentElement).getPropertyValue('--paper').trim();
 const places = {
   house: ["The House", "The heart of the map: a large old house the sisters rarely leave. Rooms are sketched loosely for now."],
   cellar: ["The Cellar", "Below the kitchen: shelves of preserved jars, generations of them, never to be opened."],
@@ -218,7 +222,7 @@ const pp = (seed, extra) => o(Object.assign({ strokeWidth: 1.2, roughness: 1.2, 
   const g = group('grocery'); g.classList.add('guess');
   hit(g, 'M198 740 H322 V820 H198 Z');
   g.appendChild(rc.rectangle(205, 758, 110, 58, pp(300, wallFill)));
-  g.appendChild(rc.rectangle(218, 744, 84, 18, pp(301, { fill: '#f1e9d6', fillStyle: 'solid' })));
+  g.appendChild(rc.rectangle(218, 744, 84, 18, pp(301, { fill: PAPER, fillStyle: 'solid' })));
   label(g, 228, 759, 'GROCERY', 17);
   g.appendChild(rc.polygon([[202, 770], [318, 770], [312, 786], [208, 786]],
     pp(302, { stroke: '#9a3b2f', fill: 'rgba(154,59,47,.45)', fillStyle: 'hachure', hachureAngle: 90, hachureGap: 7 })));
@@ -236,7 +240,7 @@ hit(stellas, 'M392 868 H520 V968 H392 Z');
 {
   const g = stellas;
   g.appendChild(rc.rectangle(400, 900, 104, 58, o({ strokeWidth: 1.2, roughness: 1.2, seed: 500, fill: 'rgba(138,125,106,.3)', fillStyle: 'hachure', hachureGap: 6 })));
-  g.appendChild(rc.rectangle(410, 884, 70, 18, o({ strokeWidth: 1.2, roughness: 1.2, seed: 501, fill: '#f1e9d6', fillStyle: 'solid' })));
+  g.appendChild(rc.rectangle(410, 884, 70, 18, o({ strokeWidth: 1.2, roughness: 1.2, seed: 501, fill: PAPER, fillStyle: 'solid' })));
   label(g, 418, 899, "STELLA'S", 17);
   // scalloped awning
   g.appendChild(rc.path('M398 908 H506 V916 Q499 924 492 916 Q485 924 478 916 Q471 924 464 916 Q457 924 450 916 Q443 924 436 916 Q429 924 422 916 Q415 924 408 916 Q403 922 398 916 Z',
@@ -253,7 +257,7 @@ hit(stellas, 'M392 868 H520 V968 H392 Z');
 {
   const mx = 486, my = 870, ink = o({ strokeWidth: 1.4, roughness: 1, seed: 90 });
   stellas.appendChild(rc.line(mx + 10, my + 24, mx + 10, my + 30, o({ strokeWidth: 1, roughness: .5, seed: 89 })));
-  stellas.appendChild(rc.rectangle(mx, my, 20, 24, o({ strokeWidth: 1.4, roughness: 1, fill: '#f1e9d6', fillStyle: 'solid', seed: 91 })));
+  stellas.appendChild(rc.rectangle(mx, my, 20, 24, o({ strokeWidth: 1.4, roughness: 1, fill: PAPER, fillStyle: 'solid', seed: 91 })));
   stellas.appendChild(rc.arc(mx + 20, my + 12, 14, 14, -Math.PI / 2, Math.PI / 2, false, ink));
   stellas.appendChild(rc.line(mx + 2, my + 5, mx + 18, my + 5, o({ strokeWidth: .8, roughness: .8, seed: 92 })));
   [mx + 5, mx + 13].forEach((sx, i) => stellas.appendChild(
@@ -309,7 +313,7 @@ g = group('walk'); g.classList.add('guess');
 const squares = [[230, 840], [330, 840], [430, 840], [530, 840], [630, 840], [700, 790], [680, 735], [600, 690], [520, 650]];
 squares.forEach(([x, y], i) => {
   hit(g, `M${x - 14} ${y - 14} h28 v28 h-28 Z`);
-  g.appendChild(rc.rectangle(x - 11, y - 11, 22, 22, o({ stroke: '#9a3b2f', fill: '#f1e9d6', fillStyle: 'solid', roughness: 1, seed: 80 + i })));
+  g.appendChild(rc.rectangle(x - 11, y - 11, 22, 22, o({ stroke: '#9a3b2f', fill: PAPER, fillStyle: 'solid', roughness: 1, seed: 80 + i })));
   label(g, x - 4 - (i >= 9 ? 4 : 0), y + 7, String(i + 1), 18);
 });
 label(g, 560, 880, 'the walk home, square by square', 20);
@@ -330,7 +334,7 @@ g = group('tree');
 hit(g, 'M770 380 h40 v40 h-40 Z');
 tree(g, 790, 400, 30, { fill: 'rgba(77,86,54,.55)' });
 label(g, 752, 442, 'nailed book', 20);
-g.appendChild(rc.rectangle(784, 394, 12, 14, o({ fill: '#f1e9d6', fillStyle: 'solid', strokeWidth: 1.5, seed: 50 })));
+g.appendChild(rc.rectangle(784, 394, 12, 14, o({ fill: PAPER, fillStyle: 'solid', strokeWidth: 1.5, seed: 50 })));
 
 // ---- compass ----
 g = group();

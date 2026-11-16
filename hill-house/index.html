@@ -29,8 +29,11 @@
     opacity: 0; transition: opacity 1.2s; }
   #shifted.show { opacity: 1; }
   /* when shown inside the Sketches page, sit on its white background */
+  html.embedded { --paper: #fff; }
   html.embedded body { background: transparent; }
-  html.embedded .sheet { box-shadow: 0 2px 10px rgba(0,0,0,.18); }
+  html.embedded main { max-width: none; }
+  html.embedded .sheet { background: transparent; box-shadow: none; padding-left: 0; padding-right: 0; }
+  html.embedded rect[filter] { display: none; }
 </style>
 <script>if (window.self !== window.top) document.documentElement.classList.add('embedded');</script>
 </head>
@@ -54,6 +57,7 @@
   </section>
 </main>
 <script>
+const PAPER = getComputedStyle(document.documentElement).getPropertyValue('--paper').trim();
 const notes = {
   veranda: "The veranda runs around the whole house. It's easy to lose track of which side you're on.",
   front: "The front door, under the porch. The first thing Eleanor sees of the house.",
@@ -113,8 +117,8 @@ function room(parent, id, x, y, w, h, name, extra = {}) {
 }
 function doors(g, list) { // short ticks marking doorways
   list.forEach(([x, y, vertical]) => g.appendChild(vertical
-    ? rc.line(x, y - 7, x, y + 7, o({ stroke: '#ebe6da', strokeWidth: 5, roughness: .3 }))
-    : rc.line(x - 7, y, x + 7, y, o({ stroke: '#ebe6da', strokeWidth: 5, roughness: .3 }))));
+    ? rc.line(x, y - 7, x, y + 7, o({ stroke: PAPER, strokeWidth: 5, roughness: .3 }))
+    : rc.line(x - 7, y, x + 7, y, o({ stroke: PAPER, strokeWidth: 5, roughness: .3 }))));
 }
 function spiral(g, cx, cy, r) {
   const pts = []; for (let a = 0; a < Math.PI * 6; a += .3) { const rr = r * (1 - a / (Math.PI * 6.6)); pts.push([cx + rr * Math.cos(a), cy + rr * Math.sin(a)]); }
