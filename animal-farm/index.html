@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Animal Farm Map</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@400;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/roughjs@4.6.6/bundled/rough.js"></script>
+<style>
+  :root { --paper: #f0e9d8; --pencil: #3a332a; --soft: #877b69; --red: #9a3b2f; --green: #66713f; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #262019; color: var(--pencil); font-family: "Caveat", cursive; }
+  main { max-width: 1000px; margin: 0 auto; padding: 16px; }
+  .sheet { min-width: 0; background: var(--paper); border-radius: 2px; padding: 14px;
+    box-shadow: 0 8px 30px rgba(0,0,0,.5); }
+  h1 { margin: 0; font-size: 34px; font-weight: 600; }
+  .sub { margin: 0 0 4px; color: var(--soft); font-size: 20px; }
+  svg { width: 100%; height: auto; display: block; }
+  svg text { font-family: "Caveat", cursive; fill: var(--pencil); pointer-events: none;
+    paint-order: stroke; stroke: var(--paper); stroke-width: 5px; stroke-linejoin: round; }
+  .hit { fill: transparent; stroke: none; }
+  .spot { cursor: pointer; }
+  .spot .hit { pointer-events: all; }
+  .spot:hover path:not(.hit) { stroke: var(--red); }
+  .spot:hover text { fill: var(--red); }
+  .story { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-top: 6px; font-size: 22px; }
+  .story input { flex: 1 1 260px; accent-color: var(--red); }
+  #stage { min-width: 260px; }
+  /* when shown inside the Sketches page, sit on its white background */
+  html.embedded { --paper: #fff; }
+  html.embedded body { background: transparent; }
+  html.embedded main { max-width: none; }
+  html.embedded .sheet { background: transparent; box-shadow: none; padding-left: 0; padding-right: 0; }
+  html.embedded rect[filter] { display: none; }
+</style>
+<script>if (window.self !== window.top) document.documentElement.classList.add('embedded');</script>
+</head>
+<body>
+<main>
+  <section class="sheet">
+    <h1>Manor Farm</h1>
+    <p class="sub"><cite>Animal Farm</cite></p>
+    <svg viewBox="0 0 900 700" id="map" role="img" aria-label="Sketch map of Animal Farm">
+      <defs>
+        <filter id="grain">
+          <feTurbulence type="fractalNoise" baseFrequency=".9" numOctaves="2" result="n"/>
+          <feColorMatrix in="n" type="matrix" values="0 0 0 0 .35  0 0 0 0 .3  0 0 0 0 .22  0 0 0 .08 0"/>
+        </filter>
+      </defs>
+      <rect width="900" height="700" fill="var(--paper)"/>
+      <rect width="900" height="700" filter="url(#grain)"/>
+      <g id="layer"></g>
+    </svg>
+    <div class="story">
+      <label for="t">the story so far</label>
+      <input id="t" type="range" min="0" max="6" value="0" step="1">
+      <span id="stage"></span>
+    </div>
+  </section>
+</main>
+<script>
+const PAPER = getComputedStyle(document.documentElement).getPropertyValue('--paper').trim();
+// stages of the story: farm name, windmill state, who runs the farmhouse, short caption
+const stages = [
+  { name: 'Manor Farm', mill: 'none', flag: false, cap: "Mr. Jones's farm, before the rebellion" },
+  { name: 'Animal Farm', mill: 'none', flag: true, cap: 'The rebellion: the animals take over' },
+  { name: 'Animal Farm', mill: 'building', flag: true, cap: 'Work begins on the windmill' },
+  { name: 'Animal Farm', mill: 'rubble', flag: true, cap: 'A storm brings the windmill down' },
+  { name: 'Animal Farm', mill: 'whole', flag: true, cap: 'Rebuilt, with thicker walls' },
+  { name: 'Animal Farm', mill: 'rubble', flag: true, cap: 'Blown up in the battle with the neighbours' },
+  { name: 'Manor Farm', mill: 'whole', flag: false, cap: 'Raised again, and the old name comes back' }
+];
+const notes = {
+  barn: 'The big barn, where the animals gather for meetings. The rules of the farm are painted on its end wall, and quietly change over time.',
+  cowshed: 'The cowshed, which gives its name to the first battle, fought in the yard here.',
+  yard: 'The farmyard between the barn, the sheds and the house.',
+  house: 'The farmhouse. At first the animals agree no animal will live in it.',
+  flag: 'The flagstaff in the farmhouse garden, flying the animals’ flag.',
+  sheds: 'Sheds and the harness room, with a loft above.',
+  orchard: 'The orchard.',
+  pasture: 'The big pasture.',
+  knoll: 'The knoll in the pasture, where the windmill is built.',
+  quarry: 'The quarry, where stone for the windmill is broken and hauled.',
+  hay: 'The hayfield. The first harvest after the rebellion is brought in here.',
+  paddock: 'A small paddock set aside, promised as a resting place for old animals.',
+  foxwood: 'Foxwood, the large, neglected neighbouring farm.',
+  pinchfield: 'Pinchfield, the smaller, well-kept neighbouring farm.',
+  road: 'The road to Willingdon, the nearby village.'
+};
+
+const svg = document.getElementById('map'), layer = document.getElementById('layer');
+const rc = rough.svg(svg), NS = 'http://www.w3.org/2000/svg';
+let s, rnd;
+const pencil = { stroke: '#3a332a', strokeWidth: 1.2, roughness: 1.6, bowing: 1.5 };
+const o = (x) => Object.assign({}, pencil, { seed: Math.floor(rnd() * 1e6) + 1 }, x);
+
+function group(id) {
+  const g = document.createElementNS(NS, 'g');
+  if (id) { g.classList.add('spot'); g.dataset.id = id; }
+  layer.appendChild(g); return g;
+}
+function hit(g, x, y, w, h) { const p = document.createElementNS(NS, 'path'); p.classList.add('hit'); p.setAttribute('d', `M${x} ${y} h${w} v${h} h${-w} Z`); g.appendChild(p); }
+function label(g, x, y, txt, size = 22, rot = 0) {
+  const t = document.createElementNS(NS, 'text');
+  t.setAttribute('x', x); t.setAttribute('y', y); t.setAttribute('font-size', size); t.setAttribute('text-anchor', 'middle');
+  if (rot) t.setAttribute('transform', `rotate(${rot} ${x} ${y})`);
+  t.textContent = txt; g.appendChild(t);
+}
+function tree(g, x, y, r, fill = 'rgba(102,113,63,.35)') {
+  g.appendChild(rc.circle(x, y, r, o({ roughness: 2.4, strokeWidth: 1, stroke: '#4d5636', fill, fillStyle: 'hachure', hachureGap: 4 })));
+}
+function windmill(g, x, y, state) {
+  if (state === 'none') { g.appendChild(rc.circle(x, y + 26, 30, o({ stroke: '#877b69', strokeLineDash: [4, 4], roughness: 1 }))); return; }
+  if (state === 'rubble') {
+    for (let i = 0; i < 14; i++) { const a = rnd() * 6.28, d = rnd() * 32;
+      g.appendChild(rc.rectangle(x + Math.cos(a) * d - 5, y + 30 + Math.sin(a) * d * .5 - 4, 10, 7, o({ fill: 'rgba(58,51,42,.3)', fillStyle: 'solid', roughness: 1 }))); }
+    return;
+  }
+  // tower
+  g.appendChild(rc.polygon([[x - 18, y + 46], [x + 18, y + 46], [x + 12, y - 10], [x - 12, y - 10]], o({ fill: 'rgba(135,123,105,.35)', fillStyle: 'hachure', hachureGap: 5, strokeWidth: 1.6 })));
+  if (state === 'building') { // scaffolding, no sails
+    [[-26, 50, -26, -18], [26, 50, 26, -18], [-26, 10, 26, 10], [-26, -14, 26, -14]].forEach(([a, b, c, d]) =>
+      g.appendChild(rc.line(x + a, y + b, x + c, y + d, o({ strokeWidth: .9, roughness: 1 }))));
+    return;
+  }
+  g.appendChild(rc.polygon([[x - 14, y - 10], [x, y - 24], [x + 14, y - 10]], o({ fill: 'rgba(58,51,42,.4)', fillStyle: 'solid' })));
+  [0, 1, 2, 3].forEach(i => { const a = i * Math.PI / 2 + .5;
+    g.appendChild(rc.line(x, y - 8, x + Math.cos(a) * 44, y - 8 + Math.sin(a) * 44, o({ strokeWidth: 2 })));
+    const ex = x + Math.cos(a) * 44, ey = y - 8 + Math.sin(a) * 44, px = -Math.sin(a) * 8, py = Math.cos(a) * 8;
+    g.appendChild(rc.polygon([[x + Math.cos(a) * 14, y - 8 + Math.sin(a) * 14], [ex, ey], [ex + px, ey + py], [x + Math.cos(a) * 14 + px, y - 8 + Math.sin(a) * 14 + py]], o({ strokeWidth: .9, fill: 'rgba(135,123,105,.3)', fillStyle: 'hachure', hachureGap: 3 }))); });
+}
+
+function render(st) {
+  s = 1945; rnd = () => (s = (s * 16807) % 2147483647) / 2147483647;
+  layer.replaceChildren();
+  let g;
+
+  // ---- neighbours ----
+  g = group('foxwood'); hit(g, 0, 0, 110, 620);
+  for (let i = 0; i < 34; i++) tree(g, 12 + rnd() * 90, 20 + rnd() * 580, 22 + rnd() * 14);
+  label(g, 55, 320, 'Foxwood', 28, -90);
+  g = group('pinchfield'); hit(g, 790, 0, 110, 620);
+  for (let y = 30; y < 600; y += 95) g.appendChild(rc.rectangle(800, y, 90, 80, o({ fill: 'rgba(102,113,63,.3)', fillStyle: 'hachure', hachureAngle: 0, hachureGap: 8 })));
+  label(g, 845, 320, 'Pinchfield', 28, 90);
+
+  // boundary hedge
+  g = group(); g.appendChild(rc.rectangle(118, 14, 664, 596, o({ strokeWidth: 1.6, roughness: 1, strokeLineDash: [12, 5] })));
+
+  // ---- fields ----
+  g = group('hay'); hit(g, 140, 40, 230, 150);
+  g.appendChild(rc.rectangle(140, 40, 230, 150, o({ fill: 'rgba(170,150,80,.35)', fillStyle: 'hachure', hachureAngle: 20, hachureGap: 7 })));
+  label(g, 255, 122, 'hayfield', 26);
+
+  g = group('pasture'); hit(g, 400, 40, 360, 260);
+  g.appendChild(rc.rectangle(400, 40, 360, 260, o({ stroke: '#877b69', fill: 'rgba(102,113,63,.22)', fillStyle: 'dots', hachureGap: 14 })));
+  label(g, 470, 72, 'pasture', 26);
+
+  g = group('quarry'); hit(g, 640, 50, 110, 70);
+  g.appendChild(rc.ellipse(695, 85, 100, 56, o({ fill: 'rgba(58,51,42,.25)', fillStyle: 'cross-hatch', hachureGap: 5 })));
+  label(g, 695, 136, 'quarry', 22);
+
+  g = group('knoll'); hit(g, 520, 120, 140, 160);
+  g.appendChild(rc.ellipse(590, 238, 150, 60, o({ stroke: '#877b69', roughness: 1.2 })));
+  windmill(g, 590, 190, st.mill);
+  label(g, 590, 288, st.mill === 'none' ? 'the knoll' : 'the knoll + windmill', 22);
+
+  // ---- yard and buildings ----
+  g = group('barn'); hit(g, 150, 230, 170, 120);
+  g.appendChild(rc.rectangle(150, 230, 170, 120, o({ strokeWidth: 2.2, fill: 'rgba(154,59,47,.22)', fillStyle: 'hachure', hachureGap: 6 })));
+  for (let i = 0; i < 6; i++) g.appendChild(rc.line(156, 252 + i * 14, 176, 252 + i * 14, o({ strokeWidth: .9, roughness: 1.4 })));
+  label(g, 245, 300, 'big barn', 28);
+  label(g, 166, 372, 'rules on the end wall', 18);
+
+  g = group('cowshed'); hit(g, 150, 390, 120, 70);
+  g.appendChild(rc.rectangle(150, 390, 120, 70, o({ fill: 'rgba(135,123,105,.25)', fillStyle: 'hachure', hachureGap: 7 })));
+  label(g, 210, 431, 'cowshed', 22);
+
+  g = group('sheds'); hit(g, 340, 230, 70, 90);
+  g.appendChild(rc.rectangle(340, 230, 70, 40, o({})));
+  g.appendChild(rc.rectangle(340, 276, 70, 40, o({})));
+  label(g, 375, 256, 'sheds', 18); label(g, 375, 302, 'harness rm', 16);
+
+  g = group('yard'); hit(g, 280, 350, 130, 110);
+  g.appendChild(rc.ellipse(345, 410, 120, 80, o({ stroke: '#877b69', strokeLineDash: [3, 5], roughness: 1 })));
+  label(g, 345, 416, 'yard', 22);
+
+  g = group('house'); hit(g, 300, 480, 160, 90);
+  g.appendChild(rc.rectangle(310, 490, 140, 70, o({ strokeWidth: 2.2, fill: 'rgba(58,51,42,.15)', fillStyle: 'cross-hatch', hachureGap: 7 })));
+  g.appendChild(rc.polygon([[300, 492], [380, 470], [460, 492]], o({ fill: 'rgba(58,51,42,.3)', fillStyle: 'hachure', hachureGap: 4 })));
+  label(g, 380, 532, 'farmhouse', 26);
+
+  g = group('flag'); hit(g, 470, 470, 50, 90);
+  g.appendChild(rc.line(480, 560, 480, 478, o({ strokeWidth: 1.6 })));
+  if (st.flag) {
+    g.appendChild(rc.rectangle(481, 478, 34, 22, o({ stroke: '#4d5636', fill: 'rgba(102,113,63,.7)', fillStyle: 'solid', roughness: 1 })));
+    g.appendChild(rc.circle(498, 489, 9, o({ stroke: PAPER, strokeWidth: 1.4, roughness: .8 })));
+  }
+
+  g = group('orchard'); hit(g, 520, 330, 240, 150);
+  for (let r = 0; r < 3; r++) for (let c = 0; c < 6; c++) tree(g, 545 + c * 38 + (rnd() - .5) * 6, 355 + r * 42 + (rnd() - .5) * 6, 26);
+  label(g, 640, 478, 'orchard', 24);
+
+  g = group('paddock'); hit(g, 560, 500, 200, 90);
+  g.appendChild(rc.rectangle(570, 505, 180, 75, o({ stroke: '#877b69' })));
+  label(g, 660, 550, 'small paddock', 22);
+
+  // ---- road & gate & sign ----
+  g = group('road'); hit(g, 330, 600, 570, 100);
+  g.appendChild(rc.curve([[370, 560], [380, 610], [500, 650], [700, 660], [900, 650]], o({ stroke: '#877b69', seed: 77 })));
+  g.appendChild(rc.curve([[395, 560], [405, 600], [510, 632], [700, 642], [900, 632]], o({ stroke: '#877b69', seed: 78 })));
+  label(g, 760, 685, 'to Willingdon →', 24);
+  // farm gate sign showing the farm's current name
+  const sign = group();
+  sign.appendChild(rc.rectangle(200, 625, 150, 36, o({ strokeWidth: 1.6, fill: PAPER, fillStyle: 'solid', roughness: 1 })));
+  sign.appendChild(rc.line(220, 661, 220, 690, o({ strokeWidth: 1.6 })));
+  sign.appendChild(rc.line(330, 661, 330, 690, o({ strokeWidth: 1.6 })));
+  label(sign, 275, 652, st.name.toUpperCase(), 22);
+}
+
+const slider = document.getElementById('t'), stage = document.getElementById('stage');
+function show() { const st = stages[+slider.value]; render(st); stage.textContent = st.cap; }
+slider.addEventListener('input', show);
+show();
+</script>
+</body>
+</html>
