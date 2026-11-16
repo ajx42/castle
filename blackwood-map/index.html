@@ -343,13 +343,6 @@ g.appendChild(rc.polygon([[840, 498], [846, 520], [840, 542], [834, 520]], o({ f
 label(g, 834, 490, 'N', 24);
 
 // ---- interaction ----
-// hovering a place shows its note as a tooltip
-document.querySelectorAll('.spot').forEach(el => {
-  const p = places[el.dataset.id]; if (!p) return;
-  const tip = document.createElementNS(NS, 'title');
-  tip.textContent = p[0] + ': ' + p[1];
-  el.prepend(tip);
-});
 </script>
 </body>
 </html>
