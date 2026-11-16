@@ -28,7 +28,11 @@
   #shifted { position: absolute; right: 18px; top: 18px; font-size: 22px; color: var(--red);
     opacity: 0; transition: opacity 1.2s; }
   #shifted.show { opacity: 1; }
+  /* when shown inside the Sketches page, sit on its white background */
+  html.embedded body { background: transparent; }
+  html.embedded .sheet { box-shadow: 0 2px 10px rgba(0,0,0,.18); }
 </style>
+<script>if (window.self !== window.top) document.documentElement.classList.add('embedded');</script>
 </head>
 <body>
 <main>

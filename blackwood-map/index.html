@@ -35,7 +35,11 @@
   ul { padding-left: 18px; margin: 6px 0; font-size: 21px; }
   li { cursor: pointer; }
   li:hover { color: var(--red); }
+  /* when shown inside the Sketches page, sit on its white background */
+  html.embedded body { background: transparent; }
+  html.embedded .sheet { box-shadow: 0 2px 10px rgba(0,0,0,.18); }
 </style>
+<script>if (window.self !== window.top) document.documentElement.classList.add('embedded');</script>
 </head>
 <body>
 <main>
