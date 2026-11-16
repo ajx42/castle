@@ -1,0 +1,347 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Blackwood Property Map</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@400;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/roughjs@4.6.6/bundled/rough.js"></script>
+<style>
+  :root {
+    --paper: #f1e9d6; --pencil: #3f382f; --soft: #8a7d6a;
+    --green: #6f7a4e; --water: #5e7f86; --red: #9a3b2f;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #2a241d; color: var(--pencil);
+    font-family: "Caveat", "Bradley Hand", cursive; }
+  main { max-width: 960px; margin: 0 auto; padding: 16px; }
+  .sheet { min-width: 0; background: var(--paper); border-radius: 2px; padding: 14px;
+    box-shadow: 0 8px 30px rgba(0,0,0,.5); position: relative; }
+  h1 { margin: 0; font-size: 34px; font-weight: 600; }
+  .sub { margin: 0 0 4px; color: var(--soft); font-size: 20px; }
+  svg { width: 100%; height: auto; display: block; }
+  svg text { font-family: "Caveat", cursive; fill: var(--pencil); pointer-events: none;
+    paint-order: stroke; stroke: var(--paper); stroke-width: 5px; stroke-linejoin: round; }
+  .spot { cursor: pointer; }
+  .guess { opacity: .5; }
+  .guess:hover, .guess.active { opacity: 1; }
+  .spot .hit { fill: transparent; stroke: none; pointer-events: all; }
+  .spot:hover path:not(.hit), .spot.active path:not(.hit) { stroke: var(--red); }
+  .spot.active text, .spot:hover text { fill: var(--red); }
+  aside h2 { margin: 0 0 4px; font-size: 30px; font-weight: 600; }
+  aside p { margin: 0 0 10px; line-height: 1.25; font-size: 22px; }
+  .hint { color: var(--soft); }
+  ul { padding-left: 18px; margin: 6px 0; font-size: 21px; }
+  li { cursor: pointer; }
+  li:hover { color: var(--red); }
+</style>
+</head>
+<body>
+<main>
+  <section class="sheet">
+    <h1>The Blackwood Property</h1>
+    <p class="sub"><cite>We Have Always Lived in the Castle</cite> by Shirley Jackson</p>
+    <svg viewBox="0 0 900 1010" id="map" role="img" aria-label="Sketch map of the Blackwood property and the village">
+      <defs>
+        <filter id="grain">
+          <feTurbulence type="fractalNoise" baseFrequency=".9" numOctaves="2" result="n"/>
+          <feColorMatrix in="n" type="matrix" values="0 0 0 0 .35  0 0 0 0 .3  0 0 0 0 .22  0 0 0 .08 0"/>
+        </filter>
+      </defs>
+      <rect width="900" height="1010" fill="var(--paper)"/>
+      <rect width="900" height="1010" filter="url(#grain)"/>
+      <g id="layer"></g>
+    </svg>
+  </section>
+</main>
+<script>
+const places = {
+  house: ["The House", "The heart of the map: a large old house the sisters rarely leave. Rooms are sketched loosely for now."],
+  cellar: ["The Cellar", "Below the kitchen: shelves of preserved jars, generations of them, never to be opened."],
+  garden: ["Kitchen Garden", "Neat rows tended by the older sister, the household's steady source of food."],
+  lawn: ["Front Lawn", "The open ground between the house and the drive. Visitors have to cross it in plain view."],
+  summerhouse: ["The Summerhouse", "A neglected garden building at the edge of the grounds, a place for imagined feasts."],
+  woods: ["The Woods", "Dense trees that close the property off to the north. Good for hiding and wandering."],
+  pines: ["Pine Wood", "A quieter grove to the east, threaded with private paths."],
+  creek: ["The Creek", "Running water along the western edge, inside the family's land: a favorite hidden spot, reached without ever passing the gate."],
+  fence: ["The Fence", "Runs around the whole property. The gate stays locked to keep the village out."],
+  drive: ["Drive & Gate", "The only way in for cars, closed off by a locked gate."],
+  village: ["Road to the Village", "Leaves the locked gate toward town. Its exact course is a guess."],
+  street: ["Main Street (faint = guess)", "The village street Merricat has to walk down, watched the whole way. Layout invented for now."],
+  grocery: ["The Grocery (faint = guess)", "Where she buys the week's food. Position is a placeholder."],
+  stellas: ["Stella's (faint = guess)", "The coffee shop on the walk home. Position is a placeholder."],
+  library: ["The Library (faint = guess)", "Where she returns and borrows books. Position is a placeholder."],
+  rochester: ["The Rochester House (faint = guess)", "From memory: the house of her mother's family, the Rochesters, which Merricat passes on the walk and feels should belong to the Blackwoods. Not ruins, as far as I recall, but run down and lived in by others. Unverified; position is a placeholder."],
+  walk: ["The Walk Home as a Game", "Merricat treats the trip like a board game, one square at a time, until she's safe inside the gate. The numbered squares are placeholders: the real route, including where she crosses and turns back, will come from the book's text."],
+  dollars: ["Silver Dollars (by the creek)", "A box of silver dollars Merricat buried near the creek, one of her protections. The exact spot along the creek is a guess."],
+  marbles: ["Blue Marbles (not placed yet)", "From memory, buried in the long field. Unverified, and the long field isn't on the map yet, so this has no spot."],
+  tree: ["The Nailed Book", "A book fastened to a tree as a guard. When it falls, the protection fails."]
+};
+
+const svg = document.getElementById('map'), layer = document.getElementById('layer');
+const rc = rough.svg(svg);
+const NS = 'http://www.w3.org/2000/svg';
+const pencil = { stroke: '#3f382f', strokeWidth: 1.2, roughness: 1.6, bowing: 1.5, seed: 11 };
+const o = (x) => Object.assign({}, pencil, x);
+
+// seeded random so the sketch is the same every load
+let s = 42; const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647;
+
+function group(id) {
+  const g = document.createElementNS(NS, 'g');
+  if (id) { g.classList.add('spot'); g.dataset.id = id; }
+  layer.appendChild(g); return g;
+}
+function hit(g, d) { const p = document.createElementNS(NS, 'path'); p.setAttribute('d', d); p.classList.add('hit'); g.appendChild(p); }
+function label(g, x, y, txt, size = 24, rot = 0) {
+  const t = document.createElementNS(NS, 'text');
+  t.setAttribute('x', x); t.setAttribute('y', y); t.setAttribute('font-size', size);
+  if (rot) t.setAttribute('transform', `rotate(${rot} ${x} ${y})`);
+  t.textContent = txt; g.appendChild(t);
+}
+function tree(g, x, y, r, opts = {}) {
+  g.appendChild(rc.circle(x, y, r, o({ roughness: 2.6, strokeWidth: 1, stroke: '#4d5636',
+    fill: opts.fill || 'rgba(111,122,78,.35)', fillStyle: 'hachure', hachureGap: 4, hachureAngle: -50 + rnd() * 20, seed: Math.floor(rnd() * 1e4) })));
+}
+function scatterTrees(g, inside, n, rMin, rMax, box) {
+  for (let i = 0, tries = 0; i < n && tries < n * 20; tries++) {
+    const x = box[0] + rnd() * (box[2] - box[0]), y = box[1] + rnd() * (box[3] - box[1]);
+    if (inside(x, y)) { tree(g, x, y, rMin + rnd() * (rMax - rMin)); i++; }
+  }
+}
+
+// ---- woods (north) ----
+let g = group('woods');
+const woodsEdge = (x) => 150 + 22 * Math.sin(x / 70) + 10 * Math.sin(x / 23);
+hit(g, 'M10 10 H890 V170 L10 170 Z');
+scatterTrees(g, (x, y) => y < woodsEdge(x), 95, 22, 36, [20, 15, 885, 175]);
+label(g, 400, 95, 'the woods', 34);
+
+// ---- pine wood (east) ----
+g = group('pines');
+hit(g, 'M700 220 C760 200 870 210 885 240 V470 C840 490 760 460 720 420 C690 360 680 270 700 220 Z');
+for (let i = 0; i < 26; i++) {
+  const x = 715 + rnd() * 160, y = 235 + rnd() * 220;
+  if (Math.hypot((x - 790) / 95, (y - 340) / 120) > 1) continue;
+  g.appendChild(rc.polygon([[x, y - 18], [x - 10, y + 10], [x + 10, y + 10]],
+    o({ stroke: '#4d5636', fill: 'rgba(77,86,54,.4)', fillStyle: 'hachure', hachureGap: 3, seed: i + 100 })));
+}
+label(g, 742, 352, 'pine wood', 28);
+
+// ---- creek ----
+g = group('creek');
+hit(g, 'M0 220 C100 245 140 330 110 420 C90 490 130 560 200 650 L150 650 C80 560 50 490 70 420 C100 330 70 260 0 260 Z');
+g.appendChild(rc.curve([[10, 230], [85, 260], [112, 330], [92, 420], [110, 520], [180, 640]], o({ stroke: '#3e5c63', seed: 3 })));
+g.appendChild(rc.curve([[10, 250], [70, 275], [94, 335], [74, 420], [92, 525], [160, 640]], o({ stroke: '#3e5c63', seed: 4 })));
+for (let i = 0; i < 9; i++) { const y = 280 + i * 40, x = 85 + 12 * Math.sin(i);
+  g.appendChild(rc.line(x, y, x + 8, y + 3, o({ stroke: '#5e7f86', roughness: 1, seed: i + 30 }))); }
+label(g, 38, 400, 'the creek', 26, -72);
+
+// ---- kitchen garden ----
+g = group('garden');
+hit(g, 'M210 230 H350 V330 H210 Z');
+g.appendChild(rc.rectangle(210, 230, 140, 100, o({ fill: 'rgba(111,122,78,.5)', fillStyle: 'hachure', hachureAngle: 0, hachureGap: 9, seed: 5 })));
+label(g, 222, 356, 'kitchen garden', 24);
+
+// ---- lawn ----
+g = group('lawn');
+hit(g, 'M260 460 a170 65 0 1 0 340 0 a170 65 0 1 0 -340 0');
+g.appendChild(rc.ellipse(430, 470, 330, 120, o({ stroke: '#8a7d6a', fill: 'rgba(111,122,78,.35)', fillStyle: 'dots', hachureGap: 11, fillWeight: 1, seed: 6 })));
+label(g, 390, 478, 'front lawn', 26);
+
+// ---- house ----
+g = group('house');
+hit(g, 'M390 230 H560 V360 H390 Z');
+g.appendChild(rc.rectangle(390, 230, 170, 130, o({ strokeWidth: 2.2, fill: 'rgba(63,56,47,.18)', fillStyle: 'cross-hatch', hachureGap: 7, seed: 7 })));
+g.appendChild(rc.line(475, 236, 475, 354, o({ strokeWidth: .8, seed: 8 })));
+g.appendChild(rc.line(396, 295, 475, 295, o({ strokeWidth: .8, seed: 9 })));
+label(g, 432, 220, 'the house', 30);
+label(g, 425, 280, 'kitchen', 20); label(g, 408, 340, 'dining rm', 20); label(g, 482, 300, 'drawing rm', 20);
+g = group('cellar');
+hit(g, 'M396 236 H424 V258 H396 Z');
+g.appendChild(rc.rectangle(398, 238, 22, 16, o({ fill: '#3f382f', fillStyle: 'solid', seed: 10 })));
+
+// ---- summerhouse ----
+g = group('summerhouse');
+hit(g, 'M605 220 H675 V280 H605 Z');
+g.appendChild(rc.polygon([[610, 245], [640, 225], [670, 245], [670, 278], [610, 278]], o({ fill: 'rgba(138,125,106,.35)', fillStyle: 'hachure', hachureGap: 5, seed: 12 })));
+label(g, 598, 300, 'summerhouse', 22);
+
+// ---- drive & gate ----
+g = group('drive');
+hit(g, 'M455 360 H495 V600 H455 Z');
+g.appendChild(rc.curve([[465, 362], [468, 450], [462, 530], [465, 600]], o({ stroke: '#8a7d6a', seed: 13 })));
+g.appendChild(rc.curve([[485, 362], [488, 450], [482, 530], [485, 600]], o({ stroke: '#8a7d6a', seed: 14 })));
+g.appendChild(rc.rectangle(452, 584, 46, 10, o({ strokeWidth: 2, fill: '#3f382f', fillStyle: 'zigzag', hachureGap: 3, seed: 15 })));
+label(g, 506, 600, 'gate (locked)', 22);
+
+// ---- fence around whole property ----
+g = group('fence');
+const fencePts = [[14, 14], [886, 14], [886, 588], [452, 588], [498, 588], [886, 588]];
+g.appendChild(rc.linearPath([[452, 588], [14, 588], [14, 14], [886, 14], [886, 588], [498, 588]], o({ strokeWidth: 1.6, roughness: 1, seed: 16 })));
+for (let x = 30; x < 880; x += 34) { if (x > 440 && x < 510) continue;
+  g.appendChild(rc.line(x, 582, x, 594, o({ roughness: .6, seed: x }))); }
+hit(g, 'M14 580 H886 V596 H14 Z');
+label(g, 140, 612, 'the fence runs all the way round', 22);
+
+// ---- road to village ----
+g = group('village'); g.classList.add('guess');
+const roadPts = [[475, 598], [500, 650], [600, 690], [690, 740], [700, 820]];
+hit(g, 'M465 596 L520 596 L720 730 L720 830 L680 830 L670 750 L470 650 Z');
+g.appendChild(rc.curve(roadPts.map(([x, y]) => [x - 9, y]), o({ stroke: '#8a7d6a', seed: 17 })));
+g.appendChild(rc.curve(roadPts.map(([x, y]) => [x + 9, y]), o({ stroke: '#8a7d6a', seed: 18 })));
+label(g, 470, 690, 'road to the village', 24, 26);
+
+// ---- the village (all guesses until sourced) ----
+g = group('street'); g.classList.add('guess');
+hit(g, 'M60 820 H860 V860 H60 Z');
+g.appendChild(rc.line(60, 822, 860, 822, o({ seed: 19 })));
+g.appendChild(rc.line(60, 858, 860, 858, o({ seed: 20 })));
+label(g, 90, 846, 'main street', 26);
+label(g, 330, 990, 'the village', 34);
+function building(id, x, y, w, h, name, seed) {
+  const g = group(id); g.classList.add('guess');
+  hit(g, `M${x} ${y} h${w} v${h} h${-w} Z`);
+  g.appendChild(rc.rectangle(x, y, w, h, o({ fill: 'rgba(138,125,106,.3)', fillStyle: 'hachure', hachureGap: 6, seed })));
+  label(g, x + 6, y + h / 2 + 7, name, 22);
+  return g;
+}
+const wallFill = { fill: 'rgba(138,125,106,.3)', fillStyle: 'hachure', hachureGap: 6 };
+const pp = (seed, extra) => o(Object.assign({ strokeWidth: 1.2, roughness: 1.2, seed }, extra));
+// grocery: storefront with sign, striped awning, window and produce crates
+{
+  const g = group('grocery'); g.classList.add('guess');
+  hit(g, 'M198 740 H322 V820 H198 Z');
+  g.appendChild(rc.rectangle(205, 758, 110, 58, pp(300, wallFill)));
+  g.appendChild(rc.rectangle(218, 744, 84, 18, pp(301, { fill: '#f1e9d6', fillStyle: 'solid' })));
+  label(g, 228, 759, 'GROCERY', 17);
+  g.appendChild(rc.polygon([[202, 770], [318, 770], [312, 786], [208, 786]],
+    pp(302, { stroke: '#9a3b2f', fill: 'rgba(154,59,47,.45)', fillStyle: 'hachure', hachureAngle: 90, hachureGap: 7 })));
+  g.appendChild(rc.rectangle(212, 790, 64, 20, pp(303)));
+  g.appendChild(rc.line(244, 790, 244, 810, pp(304, { strokeWidth: .8 })));
+  g.appendChild(rc.rectangle(286, 788, 18, 28, pp(305, { fill: '#3f382f', fillStyle: 'solid' })));
+  [[214, 810], [236, 810], [258, 810]].forEach(([x, y], i) => {
+    g.appendChild(rc.rectangle(x, y, 18, 8, pp(306 + i)));
+    [4, 9, 14].forEach((dx, j) => g.appendChild(rc.circle(x + dx, y - 1, 5, pp(320 + i * 3 + j, { roughness: .8, fill: '#9a3b2f', fillStyle: 'solid' }))));
+  });
+}
+// Stella's: coffee shop with sign, scalloped awning, big window, door, outdoor table and a mug sign
+const stellas = group('stellas'); stellas.classList.add('guess');
+hit(stellas, 'M392 868 H520 V968 H392 Z');
+{
+  const g = stellas;
+  g.appendChild(rc.rectangle(400, 900, 104, 58, o({ strokeWidth: 1.2, roughness: 1.2, seed: 500, fill: 'rgba(138,125,106,.3)', fillStyle: 'hachure', hachureGap: 6 })));
+  g.appendChild(rc.rectangle(410, 884, 70, 18, o({ strokeWidth: 1.2, roughness: 1.2, seed: 501, fill: '#f1e9d6', fillStyle: 'solid' })));
+  label(g, 418, 899, "STELLA'S", 17);
+  // scalloped awning
+  g.appendChild(rc.path('M398 908 H506 V916 Q499 924 492 916 Q485 924 478 916 Q471 924 464 916 Q457 924 450 916 Q443 924 436 916 Q429 924 422 916 Q415 924 408 916 Q403 922 398 916 Z',
+    o({ stroke: '#9a3b2f', roughness: 1, seed: 502, fill: 'rgba(154,59,47,.4)', fillStyle: 'hachure', hachureAngle: 90, hachureGap: 6 })));
+  // big front window with a table line, and door
+  g.appendChild(rc.rectangle(408, 926, 52, 26, o({ roughness: 1, seed: 503 })));
+  g.appendChild(rc.line(408, 942, 460, 942, o({ strokeWidth: .8, roughness: .8, seed: 504 })));
+  g.appendChild(rc.rectangle(468, 928, 16, 30, o({ seed: 505, fill: '#3f382f', fillStyle: 'solid' })));
+  // little outdoor table and chair
+  g.appendChild(rc.line(508, 950, 520, 950, o({ roughness: .8, seed: 506 })));
+  g.appendChild(rc.line(514, 950, 514, 960, o({ roughness: .8, seed: 507 })));
+}
+// sketched coffee mug sign hanging on the corner
+{
+  const mx = 486, my = 870, ink = o({ strokeWidth: 1.4, roughness: 1, seed: 90 });
+  stellas.appendChild(rc.line(mx + 10, my + 24, mx + 10, my + 30, o({ strokeWidth: 1, roughness: .5, seed: 89 })));
+  stellas.appendChild(rc.rectangle(mx, my, 20, 24, o({ strokeWidth: 1.4, roughness: 1, fill: '#f1e9d6', fillStyle: 'solid', seed: 91 })));
+  stellas.appendChild(rc.arc(mx + 20, my + 12, 14, 14, -Math.PI / 2, Math.PI / 2, false, ink));
+  stellas.appendChild(rc.line(mx + 2, my + 5, mx + 18, my + 5, o({ strokeWidth: .8, roughness: .8, seed: 92 })));
+  [mx + 5, mx + 13].forEach((sx, i) => stellas.appendChild(
+    rc.curve([[sx, my - 3], [sx + 3, my - 9], [sx - 2, my - 15], [sx + 2, my - 21]], o({ strokeWidth: 1, roughness: .8, seed: 93 + i }))));
+}
+// library: small classical building with pediment, columns and steps
+{
+  const g = group('library'); g.classList.add('guess');
+  hit(g, 'M140 868 H262 V985 H140 Z');
+  g.appendChild(rc.polygon([[145, 902], [201, 876], [257, 902]], pp(400, { fill: 'rgba(63,56,47,.25)', fillStyle: 'hachure', hachureGap: 5 })));
+  g.appendChild(rc.line(145, 906, 257, 906, pp(401)));
+  g.appendChild(rc.rectangle(150, 906, 102, 40, pp(402, wallFill)));
+  [160, 174, 228, 242].forEach((x, i) => g.appendChild(rc.line(x, 908, x, 944, pp(403 + i, { strokeWidth: 1.6 }))));
+  g.appendChild(rc.path('M192 946 V928 Q201 916 210 928 V946', pp(410, { fill: '#3f382f', fillStyle: 'solid' })));
+  [[144, 948, 114], [140, 953, 122], [136, 958, 130]].forEach(([x, y, w], i) => g.appendChild(rc.line(x, y, x + w, y, pp(411 + i))));
+  // open book over the door
+  g.appendChild(rc.path('M193 893 Q197 889 201 893 Q205 889 209 893 L209 899 Q205 895 201 899 Q197 895 193 899 Z', pp(415, { strokeWidth: 1 })));
+  label(g, 172, 980, 'library', 22);
+}
+// Rochester house: an old, run-down mansion
+{
+  const g = group('rochester'); g.classList.add('guess');
+  hit(g, 'M735 695 H880 V808 H735 Z');
+  const p = (seed, extra) => o(Object.assign({ strokeWidth: 1.2, roughness: 1.3, seed }, extra));
+  const wall = { fill: 'rgba(138,125,106,.3)', fillStyle: 'hachure', hachureGap: 6 };
+  // central block and two lower wings
+  g.appendChild(rc.rectangle(775, 745, 60, 60, p(200, wall)));
+  g.appendChild(rc.rectangle(742, 765, 33, 40, p(201, wall)));
+  g.appendChild(rc.rectangle(835, 765, 33, 40, p(202, wall)));
+  // roofs
+  g.appendChild(rc.polygon([[770, 745], [805, 722], [840, 745]], p(203, { fill: 'rgba(63,56,47,.35)', fillStyle: 'cross-hatch', hachureGap: 5 })));
+  g.appendChild(rc.polygon([[739, 765], [758, 752], [775, 765]], p(204, { fill: 'rgba(63,56,47,.3)', fillStyle: 'hachure', hachureGap: 4 })));
+  g.appendChild(rc.polygon([[835, 765], [852, 752], [871, 765]], p(205, { fill: 'rgba(63,56,47,.3)', fillStyle: 'hachure', hachureGap: 4 })));
+  // chimneys, one crumbling
+  g.appendChild(rc.rectangle(782, 724, 7, 14, p(206)));
+  g.appendChild(rc.polygon([[822, 726], [829, 728], [829, 740], [822, 738]], p(207)));
+  // columns and front door
+  [783, 793, 817, 827].forEach((x, i) => g.appendChild(rc.line(x, 770, x, 805, p(210 + i, { strokeWidth: 1 }))));
+  g.appendChild(rc.rectangle(799, 784, 12, 21, p(215, { fill: '#3f382f', fillStyle: 'solid' })));
+  // windows, a couple broken (cross-hatched dark)
+  [[781, 752, 0], [823, 752, 1], [799, 752, 0], [748, 775, 0], [760, 775, 1], [841, 775, 0], [853, 775, 0]].forEach(([x, y, broken], i) =>
+    g.appendChild(rc.rectangle(x, y, 8, 10, p(220 + i, broken ? { fill: '#3f382f', fillStyle: 'cross-hatch', hachureGap: 2 } : {}))));
+  // overgrown bushes at the base
+  [[748, 806], [770, 808], [846, 807], [866, 806]].forEach(([x, y], i) => tree(g, x, y, 12));
+  label(g, 742, 712, 'Rochester house', 22);
+}
+// other village buildings, unnamed
+[[760, 880, 80, 60], [560, 885, 70, 55], [60, 745, 90, 55]].forEach(([x, y, w, h], i) =>
+  group().appendChild(rc.rectangle(x, y, w, h, o({ stroke: '#b0a38c', seed: 70 + i }))));
+
+// ---- the walk home as board-game squares (placeholder route) ----
+g = group('walk'); g.classList.add('guess');
+const squares = [[230, 840], [330, 840], [430, 840], [530, 840], [630, 840], [700, 790], [680, 735], [600, 690], [520, 650]];
+squares.forEach(([x, y], i) => {
+  hit(g, `M${x - 14} ${y - 14} h28 v28 h-28 Z`);
+  g.appendChild(rc.rectangle(x - 11, y - 11, 22, 22, o({ stroke: '#9a3b2f', fill: '#f1e9d6', fillStyle: 'solid', roughness: 1, seed: 80 + i })));
+  label(g, x - 4 - (i >= 9 ? 4 : 0), y + 7, String(i + 1), 18);
+});
+label(g, 560, 880, 'the walk home, square by square', 20);
+
+// ---- buried things (red pencil X's) ----
+// only items we can name go on the map
+[['dollars', 130, 300, 'silver dollars']].forEach(([id, x, y, name], i) => {
+  const g = group(id);
+  hit(g, `M${x - 14} ${y - 14} h28 v28 h-28 Z`);
+  const red = o({ stroke: '#9a3b2f', strokeWidth: 2, roughness: 1, seed: 40 + i });
+  g.appendChild(rc.line(x - 7, y - 7, x + 7, y + 7, red));
+  g.appendChild(rc.line(x + 7, y - 7, x - 7, y + 7, red));
+  label(g, x + 12, y + 6, name, 20);
+});
+
+// ---- nailed book tree ----
+g = group('tree');
+hit(g, 'M770 380 h40 v40 h-40 Z');
+tree(g, 790, 400, 30, { fill: 'rgba(77,86,54,.55)' });
+label(g, 752, 442, 'nailed book', 20);
+g.appendChild(rc.rectangle(784, 394, 12, 14, o({ fill: '#f1e9d6', fillStyle: 'solid', strokeWidth: 1.5, seed: 50 })));
+
+// ---- compass ----
+g = group();
+g.appendChild(rc.circle(840, 520, 46, o({ seed: 60 })));
+g.appendChild(rc.polygon([[840, 498], [846, 520], [840, 542], [834, 520]], o({ fill: '#3f382f', fillStyle: 'solid', seed: 61 })));
+label(g, 834, 490, 'N', 24);
+
+// ---- interaction ----
+// hovering a place shows its note as a tooltip
+document.querySelectorAll('.spot').forEach(el => {
+  const p = places[el.dataset.id]; if (!p) return;
+  const tip = document.createElementNS(NS, 'title');
+  tip.textContent = p[0] + ': ' + p[1];
+  el.prepend(tip);
+});
+</script>
+</body>
+</html>
